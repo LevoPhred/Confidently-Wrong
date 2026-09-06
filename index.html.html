@@ -700,7 +700,11 @@ var DEFAULT_GAME_STATE = {
 };
 
 var GameStore = (function(){
-  var isFirebaseConfigured = FIREBASE_CONFIG.apiKey !== 'REPLACE_ME' && typeof firebase !== 'undefined';
+  // ?offline=1 forces local-only mode regardless of FIREBASE_CONFIG — handy
+  // for testing whether a problem is specific to the Firebase connection,
+  // without having to edit and re-upload the file.
+  var forceOffline = new URLSearchParams(window.location.search).has('offline');
+  var isFirebaseConfigured = !forceOffline && FIREBASE_CONFIG.apiKey !== 'REPLACE_ME' && typeof firebase !== 'undefined';
   var connectionMode = 'local';     // 'local' | 'firebase' — which backend setState/getState use
   var connectionStatus = 'local';   // 'local' | 'connecting' | 'connected' | 'error' — what's shown in the room bar
   var lastError = null;
