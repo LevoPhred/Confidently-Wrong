@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Confidently Wrong — Player Console</title>
+<link rel="stylesheet" href="sprites.css">
+<style>
+  :root{
+    --case: #DAD3EA;       /* pale lavender ventilator casing */
+    --case-dark: #C7BEDF;
+    --purple: #6B4FA0;     /* main purple accent, like the ReVel trim */
+    --purple-dark: #4B3574;
+    --purple-light: #8a6cc4;
+    --navy: #14131E;       /* dark "screen" background */
+    --led: #ff5a33;        /* CareFusion-style amber/red LED digit color */
+    --led-glow: rgba(255,90,51,0.55);
+    --green-ring: #4CDB6A; /* the highlighted knob ring on the reference photo */
+    --red: #B23B26;
+    --yellow: #E8B93A;
+    --ink: #241F2E;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{
+    height:100%; background:#0E0D14;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    color:var(--ink);
+    display:flex; align-items:flex-start; justify-content:center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body{ padding: 14px 10px 24px; min-height:100%; }
+
+  .led-text{
+    font-family:'Courier New', 'Consolas', monospace;
+    letter-spacing:0.06em;
+    color:var(--led);
+    text-shadow:0 0 5px var(--led-glow);
+  }
+
+  /* ---- Device casing ---- */
+  .device{
+    width:100%; max-width:420px;
+    background: linear-gradient(180deg, var(--case), var(--case-dark));
+    border: 3px solid var(--purple-dark);
+    border-radius: 28px;
+    box-shadow: 0 10px 0 rgba(0,0,0,0.35), 0 18px 30px rgba(0,0,0,0.5);
+    padding: 14px 14px 20px;
+    position: relative;
+  }
+  .device::before{
+    content:""; position:absolute; top:8px; left:50%; transform:translateX(-50%);
+    width:70px; height:8px; border-radius:6px;
+    background: repeating-linear-gradient(90deg, var(--purple-dark) 0 4px, transparent 4px 7px);
+    opacity:0.6;
+  }
+
+  .topbar{
+    margin-top: 14px;
+    background:#fff; border-radius: 14px; padding: 8px 10px;
+    text-align:center; box-shadow: inset 0 0 0 2px var(--case-dark);
+  }
+  .topbar .brand{ font-weight:800; letter-spacing:0.03em; font-size: 15px; color: var(--ink); }
+  .topbar .subbrand{ font-size:9px; letter-spacing:0.18em; color:#8b83a3; margin-top:1px; }
+
+  /* ---- Screen ---- */
+  .screen{
+    margin-top: 12px;
+    background: var(--navy);
+    border-radius: 14px;
+    padding: 14px 12px;
+    box-shadow: inset 0 0 0 3px #050509, inset 0 2px 10px rgba(0,0,0,0.6);
+    color:#fff;
+    min-height: 240px;
+  }
+  .screen-row{ display:flex; justify-content:space-between; align-items:center; font-size:11px; letter-spacing:0.05em; }
+  .screen-row, .screen-row *{ font-family:'Courier New','Consolas',monospace; color:var(--led); text-shadow:0 0 5px var(--led-glow); }
+  .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:5px; }
+  .dot.connected{ background:#3fd15c; box-shadow:0 0 6px #3fd15c; }
+  .dot.connecting{ background:var(--yellow); box-shadow:0 0 6px var(--yellow); }
+  .dot.local{ background:#888; }
+  .dot.error{ background:var(--red); box-shadow:0 0 6px var(--red); }
+
+  .avatar-wrap{ display:flex; flex-direction:column; align-items:center; margin-top: 10px; }
+  .avatar-ring{
+    width: 92px; height:92px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, #2a2840, #0c0b14);
+    border: 3px solid var(--purple);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 0 0 4px rgba(107,79,160,0.25);
+  }
+  .avatar-ring .piece-sprite{ width:56px; height:56px; background-size:contain; background-repeat:no-repeat; background-position:center; }
+  .player-name{ margin-top:8px; font-weight:700; font-size:16px; font-family:'Courier New','Consolas',monospace; color:var(--led); text-shadow:0 0 5px var(--led-glow); letter-spacing:0.04em; }
+  .player-tile{ font-size:10px; margin-top:2px; letter-spacing:0.04em; font-family:'Courier New','Consolas',monospace; color:var(--led); text-shadow:0 0 5px var(--led-glow); }
+
+  .score-lcd{
+    margin-top:14px; background:#050509; border-radius:8px; padding:8px 10px;
+    display:flex; justify-content:space-between; align-items:baseline;
+    box-shadow: inset 0 0 0 1px #2a2840;
+  }
+  .score-lcd .label{ font-size:10px; letter-spacing:0.15em; font-family:'Courier New','Consolas',monospace; color:var(--led); text-shadow:0 0 5px var(--led-glow); }
+  .score-lcd .value{ font-size:26px; }
+
+  .turn-status{
+    margin-top:14px; text-align:center; font-size:13px; font-weight:700;
+    padding:8px 6px; border-radius:8px; letter-spacing:0.02em;
+  }
+  .turn-status.mine{ background:rgba(255,90,51,0.12); }
+  .turn-status.waiting{ background:rgba(255,255,255,0.06); }
+  .turn-status, .turn-status *{ font-family:'Courier New','Consolas',monospace; color:var(--led); text-shadow:0 0 5px var(--led-glow); }
+
+  /* ---- Big rotary knob — clean two-tone dial matching the ReVel: a
+     darker purple faceted outer ring (a repeating conic gradient stands
+     in for the individual diamond-cut facets) and a smooth lighter purple
+     center disc, plus the bright green highlight ring from the reference
+     photo. ---- */
+  .knob-area{ display:flex; flex-direction:column; align-items:center; }
+  .control-panel{
+    margin-top:18px; background:#DCD8E8; border:2px solid var(--purple);
+    border-radius:14px; padding:16px 10px;
+    box-shadow: inset 0 1px 3px rgba(255,255,255,0.6), inset 0 -2px 4px rgba(0,0,0,0.08);
+  }
+  .knob{
+    width:120px; height:120px; border-radius:50%;
+    background: repeating-conic-gradient(from 0deg,
+      var(--purple-dark) 0deg 11.25deg, #3a2a5c 11.25deg 22.5deg);
+    box-shadow:
+      inset 0 2px 3px rgba(255,255,255,0.15), inset 0 -3px 5px rgba(0,0,0,0.35),
+      0 6px 0 #3a2a5c, 0 10px 18px rgba(0,0,0,0.4),
+      0 0 0 5px var(--green-ring), 0 0 16px 3px rgba(76,219,106,0.65);
+    border: none;
+    display:flex; align-items:center; justify-content:center;
+    padding: 0;
+    cursor:pointer; user-select:none; -webkit-user-select:none;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+    position:relative;
+  }
+  .knob::after{
+    /* the smooth lighter-purple center disc — the clear two-tone contrast */
+    content:"";
+    width:58%; height:58%; border-radius:50%;
+    background: radial-gradient(circle at 35% 28%, #b8a6e8, var(--purple-light) 55%, var(--purple) 100%);
+    box-shadow: inset 0 -3px 5px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.5), 0 1px 2px rgba(0,0,0,0.25);
+  }
+  .knob:active:not(.disabled){ transform: translateY(4px); box-shadow: inset 0 2px 3px rgba(255,255,255,0.15), inset 0 -3px 5px rgba(0,0,0,0.35), 0 2px 0 #3a2a5c, 0 4px 10px rgba(0,0,0,0.4), 0 0 0 5px var(--green-ring); }
+  .knob.disabled{
+    background: repeating-conic-gradient(from 0deg, #8b8598 0deg 11.25deg, #6c6779 11.25deg 22.5deg);
+    box-shadow: inset 0 2px 3px rgba(255,255,255,0.1), inset 0 -3px 5px rgba(0,0,0,0.25), 0 6px 0 #524d5e, 0 0 0 5px #4a4658;
+    opacity:0.75; cursor:default;
+  }
+  .knob.disabled::after{ background: radial-gradient(circle at 35% 28%, #b3adc4, #9a94ad 55%, #837da0 100%); }
+  .knob-caption{ margin-top:12px; font-size:12px; letter-spacing:0.08em; text-align:center; min-height:14px; }
+
+  /* ---- Bottom control strip ---- */
+  .bottombar{ display:flex; align-items:center; justify-content:space-between; margin-top:16px; gap:8px; }
+  .mini-btn{
+    flex:0 0 auto; background:var(--purple); color:#fff; border:none; border-radius:8px;
+    padding:8px 12px; font-size:11px; font-weight:700; letter-spacing:0.03em; cursor:pointer;
+    box-shadow: 0 3px 0 var(--purple-dark);
+  }
+  .mini-btn:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--purple-dark); }
+  .room-chip{ flex:1; text-align:right; font-size:10px; color:#5b5473; letter-spacing:0.05em; }
+
+  /* ---- Join screen: step 1 — a single LED screen + the ReVel-style
+     yellow alarm-silence button, nothing else ---- */
+  .led-flash-screen{
+    text-align:center; padding:26px 10px;
+  }
+  .led-flash-text{
+    font-size:20px; letter-spacing:0.12em;
+    animation: ledFlash 1s steps(1) infinite;
+  }
+  @keyframes ledFlash{ 0%, 49%{ opacity:1; } 50%, 100%{ opacity:0.22; } }
+  .led-flash-sub{ font-size:10px; margin-top:10px; opacity:0.8; }
+
+  .yellow-btn-wrap{ display:flex; justify-content:center; margin:18px 0 4px; }
+  .yellow-btn-surround{
+    width:150px; height:150px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, var(--case), var(--case-dark));
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: inset 0 2px 4px rgba(255,255,255,0.6), inset 0 -4px 8px rgba(0,0,0,0.15), 0 6px 14px rgba(0,0,0,0.35);
+  }
+  .yellow-join-btn{
+    width:96px; height:96px; border-radius:50%; border:none; cursor:pointer;
+    background: radial-gradient(circle at 35% 28%, #fff6c2, #f5d020 55%, #d4a017 100%);
+    box-shadow: 0 5px 0 #a87d0e, inset 0 2px 3px rgba(255,255,255,0.7), 0 8px 16px rgba(0,0,0,0.3);
+  }
+  .yellow-join-btn:active{ transform:translateY(4px); box-shadow:0 1px 0 #a87d0e, inset 0 2px 3px rgba(255,255,255,0.7); }
+  .yellow-btn-label{ text-align:center; margin-top:10px; font-size:11px; letter-spacing:0.08em; color:#5b5473; font-weight:700; }
+
+  /* ---- Join screen: step 2 — name (LED bar) + Transport Mode carousel ---- */
+  .join-title{ font-size:13px; letter-spacing:0.05em; text-align:center; margin-bottom:10px; font-family:'Courier New','Consolas',monospace; color:var(--led); text-shadow:0 0 5px var(--led-glow); }
+  .led-input-bar{
+    background:#050509; border-radius:8px; padding:12px 14px; margin-bottom:18px;
+    box-shadow: inset 0 0 0 2px #1c1a2b, inset 0 2px 6px rgba(0,0,0,0.6);
+  }
+  .led-input-bar input{
+    width:100%; background:transparent; border:none; outline:none;
+    font-family:'Courier New','Consolas',monospace; font-size:18px; letter-spacing:0.08em;
+    color:var(--led); text-shadow:0 0 5px var(--led-glow); text-align:center;
+  }
+  .led-input-bar input::placeholder{ color:rgba(255,90,51,0.35); text-shadow:none; }
+
+  .transport-label{ font-size:11px; letter-spacing:0.08em; text-align:center; margin-bottom:10px; color:#9d97c4; }
+  .ts-display{
+    width:150px; margin:14px auto 0; background:#050509; border-radius:10px; padding:12px 8px;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    box-shadow: inset 0 0 0 2px #1c1a2b, inset 0 2px 6px rgba(0,0,0,0.6);
+    -webkit-user-select:none; user-select:none;
+  }
+  .ts-display .piece-sprite{ width:56px; height:56px; background-size:contain; background-repeat:no-repeat; background-position:center; }
+  .ts-label{ font-family:'Courier New','Consolas',monospace; font-size:11px; letter-spacing:0.05em; color:var(--led); text-shadow:0 0 5px var(--led-glow); text-align:center; }
+  .ts-dots{ display:flex; justify-content:center; gap:5px; margin:10px 0 18px; }
+  .ts-dot{ width:6px; height:6px; border-radius:50%; background:#322e48; }
+  .ts-dot.active{ background:var(--led); box-shadow:0 0 4px var(--led-glow); }
+
+  .confirm-join-btn{
+    width:100%; background:var(--green-ring); color:#0a2e12; border:none; border-radius:8px;
+    padding:12px 0; font-size:14px; font-weight:800; letter-spacing:0.04em; cursor:pointer;
+    box-shadow:0 3px 0 #2f9e48;
+  }
+  .confirm-join-btn:disabled{ background:#4a4658; color:#8b83a3; box-shadow:0 3px 0 #322e48; cursor:not-allowed; }
+  .customize-back{ background:none; border:none; font-size:11px; letter-spacing:0.05em; cursor:pointer; padding:2px 0 10px; font-family:'Courier New','Consolas',monospace; color:var(--led); text-shadow:0 0 5px var(--led-glow); }
+
+  /* ---- Mission / Rapid / Hangar question screens — styled to exactly
+     match the Board's own monitor overlay (white device screen, dark
+     toolbar, grey question area) rather than the phone's LED look, since
+     these are the one part of the interface meant to look like the
+     familiar in-person Board display. ---- */
+  .qa-monitor{
+    background:#fff; border-radius:10px; overflow:hidden; font-family:'Segoe UI', Arial, sans-serif;
+    box-shadow:0 6px 16px rgba(0,0,0,0.4);
+  }
+  .qa-toolbar{ background:#2b2f33; padding:7px 10px; text-align:center; font-size:11px; color:#fff; font-weight:700; letter-spacing:0.05em; }
+  .qa-toolbar.rapid{ background:#5a4300; }
+  .qa-toolbar.hangar{ background:#4a1010; }
+  .qa-monitor-screen{ background:#eef0f2; padding:14px 14px; }
+  .qa-cat{ display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700; color:#222; margin-bottom:10px; }
+  .qa-timer{ background:#c0392b; color:#fff; border-radius:50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; flex:none; }
+  .qa-timer.low{ background:#e74c3c; animation: qaTimerPulse 0.6s ease-in-out infinite; }
+  @keyframes qaTimerPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.12); } }
+  .qa-question{ font-size:14px; line-height:1.4; margin-bottom:12px; color:#333; }
+  .qa-options{ display:flex; flex-direction:column; gap:7px; margin-bottom:14px; }
+  .qa-options div{
+    background:linear-gradient(#fbfbfb,#e4e6e8); border:1px solid #b8bec3; border-radius:6px;
+    padding:9px 10px; font-size:12.5px; color:#222;
+  }
+  /* Tappable answer options (missions) — replaces the old self-reported
+     Correct/Incorrect demo buttons with real, gradeable answer selection. */
+  .qa-options-selectable .qa-option{ cursor:pointer; transition: transform 0.06s ease; }
+  .qa-options-selectable .qa-option:active{ transform: scale(0.98); }
+  .qa-option.picked{ background:linear-gradient(#e9e3f7,#d5c9ee); border-color:var(--purple); }
+  .qa-option.locked{ cursor:default; }
+  .qa-option.correct-answer{ background:#3f9142; border-color:#2c6b30; color:#fff; font-weight:700; }
+  .qa-option.wrong-answer{ background:#c0392b; border-color:#8f2a20; color:#fff; font-weight:700; }
+  .qa-demo-btns{ display:flex; gap:8px; }
+  .qa-demo-btns button{
+    flex:1; font-family:'Segoe UI', Arial, sans-serif; font-weight:700; font-size:12px;
+    padding:10px 0; border:1px solid rgba(0,0,0,0.15); border-radius:6px; cursor:pointer; color:#fff;
+    box-shadow:0 2px 0 rgba(0,0,0,0.2); letter-spacing:0.02em;
+  }
+  .qa-demo-btns .ok{ background:#3f9142; }
+  .qa-demo-btns .no{ background:#c0392b; }
+  .qa-result{ text-align:center; font-size:14px; font-weight:700; padding:9px 6px; border-radius:6px; }
+  .qa-result.correct{ color:#fff; background:#3f9142; }
+  .qa-result.incorrect{ color:#fff; background:#c0392b; }
+
+  .buzz-btn{
+    width:100%; padding:22px 0; border:none; border-radius:12px; font-size:16px; font-weight:800;
+    letter-spacing:0.05em; cursor:pointer; margin-bottom:14px;
+    background:linear-gradient(180deg, var(--purple-light), var(--purple)); color:#fff;
+    box-shadow:0 4px 0 var(--purple-dark);
+  }
+  .buzz-btn:active{ transform:translateY(3px); box-shadow:0 1px 0 var(--purple-dark); }
+  .buzz-btn:disabled{ background:#4a4658; box-shadow:0 4px 0 #322e48; cursor:default; }
+  .buzz-status{ text-align:center; font-size:12px; margin-bottom:10px; font-family:'Courier New','Consolas',monospace; color:var(--led); text-shadow:0 0 5px var(--led-glow); }
+
+  .hangar-wager-intro{ font-size:12.5px; line-height:1.4; margin-bottom:10px; font-family:'Courier New','Consolas',monospace; color:var(--led); text-shadow:0 0 4px var(--led-glow); }
+  .hangar-score-note{ font-size:13px; margin-bottom:8px; }
+  .hangar-wager-presets{ display:flex; gap:6px; margin:10px 0 14px; }
+  .hangar-wager-presets button{
+    flex:1; padding:8px 0; border:none; border-radius:8px; font-size:11px; font-weight:800;
+    letter-spacing:0.03em; cursor:pointer; background:#1c1a2b; border:1px solid #322e48;
+    font-family:'Courier New','Consolas',monospace; color:var(--led); text-shadow:0 0 4px var(--led-glow);
+  }
+  .hangar-wager-note{ font-size:12px; margin-bottom:8px; text-align:center; color:#555; }
+
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+
+<div class="device">
+  <div class="topbar">
+    <div class="brand">CONFIDENTLY WRONG</div>
+    <div class="subbrand">FLIGHT CONSOLE &middot; PLAYER UNIT</div>
+  </div>
+
+  <!-- JOIN SCREEN — STEP 1: a single LED screen + the yellow join button -->
+  <div class="screen" id="joinTapScreen">
+    <div class="screen-row"><span><span class="dot local" id="joinDot"></span><span id="joinConnLabel">CONNECTING&hellip;</span></span><span id="joinRoomLabel">ROOM ----</span></div>
+    <div class="led-flash-screen">
+      <div class="led-flash-text led-text">TAP TO JOIN</div>
+      <div class="led-flash-sub led-text" id="joinSeatsNote">8 SEATS OPEN</div>
+    </div>
+  </div>
+  <div class="yellow-btn-wrap">
+    <div class="yellow-btn-surround">
+      <button class="yellow-join-btn" id="tapToJoinBtn" onclick="startJoinFlow()"></button>
+    </div>
+  </div>
+  <div class="yellow-btn-label" id="tapToJoinScreenLabel">TAP TO JOIN</div>
+
+  <!-- JOIN SCREEN — STEP 2: name (LED bar) + Transport Mode carousel -->
+  <div class="screen hidden" id="joinCustomizeScreen">
+    <button class="customize-back" onclick="backToTapScreen()">&larr; BACK</button>
+    <div class="join-title">YOUR NAME</div>
+    <div class="led-input-bar">
+      <input type="text" id="nameInput" placeholder="TYPE NAME" maxlength="20">
+    </div>
+    <div class="transport-label led-text">SPIN TO SELECT YOUR TRANSPORT MODE</div>
+    <div class="control-panel">
+      <div class="knob-area">
+        <button class="knob" id="transportKnob"></button>
+      </div>
+    </div>
+    <div class="ts-display">
+      <div class="piece-sprite" id="tsSprite"></div>
+      <div class="ts-label" id="tsLabel">&mdash;</div>
+    </div>
+    <div class="ts-dots" id="tsDots"></div>
+    <button class="confirm-join-btn" id="confirmJoinBtn" onclick="confirmJoin()" disabled>JOIN GAME</button>
+  </div>
+
+  <!-- MAIN SCREEN -->
+  <div class="screen hidden" id="mainScreen">
+    <div class="screen-row"><span><span class="dot local" id="mainDot"></span><span id="mainConnLabel">CONNECTING&hellip;</span></span><span id="mainRoomLabel">ROOM ----</span></div>
+
+    <!-- idle / your-turn view -->
+    <div id="idleView">
+      <div class="avatar-wrap">
+        <div class="avatar-ring"><div class="piece-sprite" id="mySprite"></div></div>
+        <div class="player-name" id="myName">&mdash;</div>
+        <div class="player-tile" id="myTile"></div>
+      </div>
+      <div class="score-lcd">
+        <div class="label">SCORE</div>
+        <div class="value led-text" id="myScore">0</div>
+      </div>
+      <div class="turn-status waiting" id="turnStatus">WAITING&hellip;</div>
+    </div>
+
+    <!-- mission-answering view (this player is on a mission) -->
+    <div id="missionView" class="hidden">
+      <div class="qa-monitor">
+        <div class="qa-toolbar">MISSION</div>
+        <div class="qa-monitor-screen">
+          <div class="qa-cat"><span id="missionCat">CATEGORY</span><span class="qa-timer" id="missionTimer">40s</span></div>
+          <div class="qa-question" id="missionQuestion"></div>
+          <div class="qa-options qa-options-selectable" id="missionOptions"></div>
+          <div class="qa-result hidden" id="missionResultBox"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- rapid-round view (this player is one of the two involved) -->
+    <div id="rapidView" class="hidden">
+      <button class="buzz-btn" id="buzzBtn" onclick="handleBuzz()">BUZZ IN</button>
+      <div class="buzz-status" id="buzzStatus"></div>
+      <div id="rapidQABlock" class="hidden">
+        <div class="qa-monitor">
+          <div class="qa-toolbar rapid">RAPID ROUND</div>
+          <div class="qa-monitor-screen">
+            <div class="qa-cat"><span>ANSWER NOW</span><span class="qa-timer" id="rapidTimer">20s</span></div>
+            <div class="qa-question" id="rapidQuestion"></div>
+            <div class="qa-options qa-options-selectable" id="rapidOptions"></div>
+          </div>
+        </div>
+      </div>
+      <div class="qa-result hidden" id="rapidResultBox"></div>
+    </div>
+
+    <!-- Hangar Challenge / RTB view (this player lapped the board) -->
+    <div id="hangarView" class="hidden">
+      <div id="hangarWagerBlock">
+        <div class="hangar-wager-intro">You made it all the way around! Wager any amount up to your score on the toughest question in the bank.</div>
+        <div class="hangar-score-note led-text" id="hangarMaxScore">SCORE: 0</div>
+        <div class="led-input-bar">
+          <input type="number" id="hangarWagerInput" min="0" step="1" value="0" inputmode="numeric">
+        </div>
+        <div class="hangar-wager-presets">
+          <button onclick="setHangarWagerPreset(0)">0</button>
+          <button onclick="setHangarWagerPreset(0.25)">25%</button>
+          <button onclick="setHangarWagerPreset(0.5)">50%</button>
+          <button onclick="setHangarWagerPreset(1)">ALL IN</button>
+        </div>
+        <button class="confirm-join-btn" onclick="submitMyHangarWager()">LOCK IN WAGER</button>
+      </div>
+
+      <div id="hangarQABlock" class="hidden">
+        <div class="qa-monitor">
+          <div class="qa-toolbar hangar">HANGAR CHALLENGE</div>
+          <div class="qa-monitor-screen">
+            <div class="qa-cat"><span id="hangarWagerNote">WAGERED</span><span class="qa-timer" id="hangarTimer">60s</span></div>
+            <div class="qa-question" id="hangarQuestion"></div>
+            <div class="qa-options qa-options-selectable" id="hangarOptions"></div>
+          </div>
+        </div>
+      </div>
+      <div class="qa-result hidden" id="hangarResultBox"></div>
+    </div>
+  </div>
+
+  <!-- knob only shown in the idle view, framed in the same bordered
+       control-panel bezel the ReVel uses around its own knob -->
+  <div class="control-panel" id="knobArea">
+    <div class="knob-area">
+      <button class="knob disabled" id="spinBtn"></button>
+      <div class="knob-caption led-text" id="knobCaption">PRESS TO SPIN</div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <button class="mini-btn hidden" id="leaveBtn">LEAVE SEAT</button>
+    <div class="room-chip" id="roomChip"></div>
+  </div>
+</div>
+
+<script src="game-store.js"></script>
+<script>
+// =====================================================================
+// PLAYER CONSOLE
+// A thin phone-friendly view over the exact same GameStore the Board
+// uses (see game-store.js). Joining is a single tap (auto-assigned to
+// the next open seat) followed by name + Transport Mode — no manual
+// seat picker. Missions/Rapid Round/Hangar Challenge answers go through
+// the same shared functions the Board's demo buttons use, so the Board's
+// tick loop remains the one place that advances turns.
+// =====================================================================
+
+var TRANSPORT_LABELS = {
+  'sprite-heli-yellow': 'YELLOW HELICOPTER',
+  'sprite-heli-red': 'RED HELICOPTER',
+  'sprite-heli-blue': 'BLUE HELICOPTER',
+  'sprite-heli-green': 'GREEN HELICOPTER',
+  'sprite-plane-yellow': 'YELLOW AIRPLANE',
+  'sprite-plane-red': 'RED AIRPLANE',
+  'sprite-plane-blue': 'BLUE AIRPLANE',
+  'sprite-plane-green': 'GREEN AIRPLANE'
+};
+
+var STORAGE_KEY = 'cw_playerId_' + GameStore.getState().roomCode;
+var myPlayerId = localStorage.getItem(STORAGE_KEY);
+var pendingSeatId = null;      // seat auto-assigned in step 1, being customized in step 2
+var selectedSprite = null;     // sprite chosen (not yet confirmed) in step 2
+
+var joinTapScreenEl = document.getElementById('joinTapScreen');
+var yellowBtnWrapEl = document.querySelector('.yellow-btn-wrap');
+var yellowBtnLabelEl = document.getElementById('tapToJoinScreenLabel');
+var joinCustomizeScreenEl = document.getElementById('joinCustomizeScreen');
+var mainScreenEl = document.getElementById('mainScreen');
+var nameInputEl = document.getElementById('nameInput');
+var confirmJoinBtnEl = document.getElementById('confirmJoinBtn');
+var spinBtnEl = document.getElementById('spinBtn');
+var knobAreaEl = document.getElementById('knobArea');
+var knobCaptionEl = document.getElementById('knobCaption');
+var leaveBtnEl = document.getElementById('leaveBtn');
+var idleViewEl = document.getElementById('idleView');
+var missionViewEl = document.getElementById('missionView');
+var rapidViewEl = document.getElementById('rapidView');
+var hangarViewEl = document.getElementById('hangarView');
+
+// ---- Step 1: tap to join (auto-assigns the next open seat) ----
+function startJoinFlow(){
+  var state = GameStore.getState();
+  var openSeat = ALL_SEAT_IDS.filter(function(id){ return !state.players[id].connected; })[0];
+  if (!openSeat){
+    document.getElementById('joinSeatsNote').textContent = 'GAME FULL (8/8)';
+    return;
+  }
+  pendingSeatId = openSeat;
+  selectedSprite = null;
+  nameInputEl.value = '';
+  refreshTransportOptions(state);
+  updateConfirmEnabled();
+  joinTapScreenEl.classList.add('hidden');
+  yellowBtnWrapEl.classList.add('hidden');
+  yellowBtnLabelEl.classList.add('hidden');
+  joinCustomizeScreenEl.classList.remove('hidden');
+}
+
+function backToTapScreen(){
+  pendingSeatId = null;
+  joinCustomizeScreenEl.classList.add('hidden');
+  joinTapScreenEl.classList.remove('hidden');
+  yellowBtnWrapEl.classList.remove('hidden');
+  yellowBtnLabelEl.classList.remove('hidden');
+}
+
+// ---- Step 2: Transport Mode dial ----
+// Reuses the same "PRESS TO SPIN" knob styling, but here it's spun by
+// dragging around its center (like a real rotary dial) to cycle through
+// available transport modes, rather than being pressed to roll a die.
+var transportOptions = [];   // sprites not currently taken by another connected player
+var transportIndex = 0;
+var transportKnobEl = document.getElementById('transportKnob');
+var transportKnobRotation = 0; // cumulative visual rotation, purely cosmetic spin feedback
+
+function refreshTransportOptions(state){
+  var taken = {};
+  state.turnOrder.forEach(function(id){
+    if (id !== pendingSeatId) taken[state.players[id].sprite] = true;
+  });
+  transportOptions = AVAILABLE_SPRITES.filter(function(s){ return !taken[s]; });
+  if (transportOptions.length === 0) transportOptions = AVAILABLE_SPRITES.slice(); // shouldn't happen with <=8 seats, but never leave the dial empty
+
+  if (selectedSprite && transportOptions.indexOf(selectedSprite) !== -1){
+    transportIndex = transportOptions.indexOf(selectedSprite);
+  } else {
+    transportIndex = 0;
+    selectedSprite = transportOptions[0];
+  }
+  renderTransportDisplay();
+}
+
+function cycleTransport(delta){
+  if (transportOptions.length === 0) return;
+  transportIndex = (transportIndex + delta + transportOptions.length) % transportOptions.length;
+  selectedSprite = transportOptions[transportIndex];
+  renderTransportDisplay();
+  updateConfirmEnabled();
+}
+
+function renderTransportDisplay(){
+  document.getElementById('tsSprite').className = 'piece-sprite ' + (selectedSprite || '');
+  document.getElementById('tsLabel').textContent = TRANSPORT_LABELS[selectedSprite] || '\u2014';
+  document.getElementById('tsDots').innerHTML = transportOptions.map(function(s, i){
+    return '<div class="ts-dot' + (i === transportIndex ? ' active' : '') + '"></div>';
+  }).join('');
+}
+
+// Drag-to-rotate: track the pointer's angle around the knob's own center.
+// Every full "step" of rotation (360deg divided across however many
+// transport options are currently available) advances the selection by
+// one, in whichever direction it was spun — a quick tap with negligible
+// movement just advances one step, so it still works without dragging.
+(function setUpTransportKnobDrag(){
+  var dragging = null; // { cx, cy, lastAngle, pendingDelta, totalMovement }
+
+  function angleAt(clientX, clientY, cx, cy){
+    return Math.atan2(clientY - cy, clientX - cx) * 180 / Math.PI;
+  }
+
+  function onPointerDown(e){
+    var rect = transportKnobEl.getBoundingClientRect();
+    var cx = rect.left + rect.width / 2;
+    var cy = rect.top + rect.height / 2;
+    dragging = {
+      cx: cx, cy: cy,
+      lastAngle: angleAt(e.clientX, e.clientY, cx, cy),
+      pendingDelta: 0,
+      totalMovement: 0
+    };
+    transportKnobEl.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  }
+
+  function onPointerMove(e){
+    if (!dragging) return;
+    var angle = angleAt(e.clientX, e.clientY, dragging.cx, dragging.cy);
+    var delta = angle - dragging.lastAngle;
+    if (delta > 180) delta -= 360;   // normalize across the -180/180 wraparound
+    if (delta < -180) delta += 360;
+    dragging.lastAngle = angle;
+    dragging.totalMovement += Math.abs(delta);
+
+    transportKnobRotation += delta;
+    transportKnobEl.style.transform = 'rotate(' + transportKnobRotation + 'deg)';
+
+    dragging.pendingDelta += delta;
+    var stepDeg = 360 / Math.max(transportOptions.length, 1);
+    while (dragging.pendingDelta >= stepDeg){
+      dragging.pendingDelta -= stepDeg;
+      cycleTransport(1);
+    }
+    while (dragging.pendingDelta <= -stepDeg){
+      dragging.pendingDelta += stepDeg;
+      cycleTransport(-1);
+    }
+  }
+
+  function onPointerUp(e){
+    if (!dragging) return;
+    // A tap with barely any movement still advances one step, so this
+    // remains usable even for someone who just taps instead of dragging.
+    if (dragging.totalMovement < 6){
+      cycleTransport(1);
+    }
+    dragging = null;
+  }
+
+  transportKnobEl.addEventListener('pointerdown', onPointerDown);
+  transportKnobEl.addEventListener('pointermove', onPointerMove);
+  transportKnobEl.addEventListener('pointerup', onPointerUp);
+  transportKnobEl.addEventListener('pointercancel', onPointerUp);
+})();
+
+function updateConfirmEnabled(){
+  var nameOk = nameInputEl.value.trim().length > 0;
+  confirmJoinBtnEl.disabled = !(nameOk && selectedSprite);
+}
+nameInputEl.addEventListener('input', updateConfirmEnabled);
+
+function confirmJoin(){
+  if (!pendingSeatId || !selectedSprite) return;
+  var name = nameInputEl.value.trim();
+  if (!name) return;
+  joinAsPlayer(pendingSeatId, name, selectedSprite); // shared with game-store.js — grows turnOrder
+  localStorage.setItem(STORAGE_KEY, pendingSeatId);
+  myPlayerId = pendingSeatId;
+  pendingSeatId = null;
+  render(GameStore.getState());
+}
+
+function leaveSeat(){
+  if (!myPlayerId) return;
+  leaveAsPlayer(myPlayerId); // shared with game-store.js — shrinks turnOrder, hands off the turn if needed
+  localStorage.removeItem(STORAGE_KEY);
+  myPlayerId = null;
+  render(GameStore.getState());
+}
+leaveBtnEl.addEventListener('click', leaveSeat);
+
+// Guards against double-taps firing two rolls for one press, the same
+// pattern the Board uses for its own PRESS TO MOVE button.
+var spinLocked = false;
+spinBtnEl.addEventListener('click', function(){
+  if (spinLocked) return;
+  var state = GameStore.getState();
+  if (state.phase !== 'TURN_START' || state.currentPlayerId !== myPlayerId) return;
+  spinLocked = true;
+  spinMoveIndicator(); // shared with the Board — see game-store.js
+  setTimeout(function(){ spinLocked = false; }, 1200);
+});
+
+function connectionDotClass(){
+  var status = GameStore.getConnectionStatus();
+  if (status === 'local' && GameStore.wantsFirebase()) return 'connecting';
+  if (status === 'connected') return 'connected';
+  if (status === 'error') return 'error';
+  return 'local';
+}
+function connectionLabel(){
+  var status = GameStore.getConnectionStatus();
+  if (status === 'local' && GameStore.wantsFirebase()) return 'CONNECTING\u2026';
+  if (status === 'connected') return 'LIVE';
+  if (status === 'error') return 'CONNECTION ERROR';
+  return 'OFFLINE MODE';
+}
+
+function renderJoinTapScreen(state){
+  document.getElementById('joinDot').className = 'dot ' + connectionDotClass();
+  document.getElementById('joinConnLabel').textContent = connectionLabel();
+  document.getElementById('joinRoomLabel').textContent = 'ROOM ' + state.roomCode;
+  var openCount = ALL_SEAT_IDS.filter(function(id){ return !state.players[id].connected; }).length;
+  document.getElementById('joinSeatsNote').textContent = openCount > 0 ? (openCount + ' SEAT' + (openCount === 1 ? '' : 'S') + ' OPEN') : 'GAME FULL (8/8)';
+}
+
+// ---- Mission-answering view ----
+var lastRenderedMissionKey = null;
+var pickedMissionOption = null;
+
+function renderMissionOptions(q, correctIndex, pickedIndex){
+  var html = q.options.map(function(o, i){
+    var cls = 'qa-option';
+    var clickAttr = '';
+    if (correctIndex !== null){
+      cls += ' locked';
+      if (i === correctIndex) cls += ' correct-answer';
+      else if (i === pickedIndex) cls += ' wrong-answer';
+    } else {
+      if (i === pickedIndex) cls += ' picked locked';
+      else clickAttr = ' onclick="handleMissionOptionClick(' + i + ')"';
+    }
+    return '<div class="' + cls + '"' + clickAttr + '>' + o + '</div>';
+  }).join('');
+  document.getElementById('missionOptions').innerHTML = html;
+}
+
+function handleMissionOptionClick(i){
+  if (pickedMissionOption !== null) return; // already answered — ignore further taps
+  pickedMissionOption = i;
+  var state = GameStore.getState();
+  var q = SAMPLE_QUESTIONS[state.turn.missionCategory];
+  renderMissionOptions(q, null, i); // show as picked immediately while it resolves
+  submitMissionAnswer(i); // shared with game-store.js — grades against the real answer and resolves
+}
+
+function renderMissionView(state){
+  var q = SAMPLE_QUESTIONS[state.turn.missionCategory];
+  var key = state.turn.landedSpaceId + '|' + state.turn.missionCategory + '|' + state.currentPlayerId;
+
+  if (lastRenderedMissionKey !== key){
+    lastRenderedMissionKey = key;
+    pickedMissionOption = null;
+    document.getElementById('missionCat').textContent = state.turn.missionCategory.toUpperCase();
+    document.getElementById('missionQuestion').textContent = q.q;
+    renderMissionOptions(q, null, null);
+    document.getElementById('missionResultBox').classList.add('hidden');
+  }
+
+  if (state.turn.subphase === 'MISSION_RESOLVED'){
+    renderMissionOptions(q, q.answer, pickedMissionOption);
+    var box = document.getElementById('missionResultBox');
+    box.classList.remove('hidden');
+    var correct = state.turn.missionResult === 'correct';
+    box.className = 'qa-result ' + (correct ? 'correct' : 'incorrect');
+    box.textContent = correct ? 'CORRECT \u2014 POINTS AWARDED' : 'INCORRECT \u2014 NO POINTS';
+  }
+}
+
+// ---- Rapid-round view ----
+var lastRenderedRapidKey = null;
+var pickedRapidOption = null;
+
+function renderRapidOptions(q, correctIndex, pickedIndex){
+  var html = q.options.map(function(o, i){
+    var cls = 'qa-option';
+    var clickAttr = '';
+    if (correctIndex !== null){
+      cls += ' locked';
+      if (i === correctIndex) cls += ' correct-answer';
+      else if (i === pickedIndex) cls += ' wrong-answer';
+    } else {
+      if (i === pickedIndex) cls += ' picked locked';
+      else clickAttr = ' onclick="handleRapidOptionClick(' + i + ')"';
+    }
+    return '<div class="' + cls + '"' + clickAttr + '>' + o + '</div>';
+  }).join('');
+  document.getElementById('rapidOptions').innerHTML = html;
+}
+
+function handleRapidOptionClick(i){
+  if (pickedRapidOption !== null) return; // already answered
+  pickedRapidOption = i;
+  var state = GameStore.getState();
+  var q = SAMPLE_QUESTIONS[state.turn.rapidCategory];
+  renderRapidOptions(q, null, i);
+  submitRapidAnswer(i); // shared with game-store.js — grades against the real answer and resolves
+}
+
+function renderRapidView(state){
+  var key = state.turn.rapidPlayers.join('|') + '|' + state.turn.rapidCategory;
+  var q = SAMPLE_QUESTIONS[state.turn.rapidCategory];
+  var buzzBtn = document.getElementById('buzzBtn');
+  var buzzStatus = document.getElementById('buzzStatus');
+  var qaBlock = document.getElementById('rapidQABlock');
+
+  if (lastRenderedRapidKey !== key){
+    lastRenderedRapidKey = key;
+    pickedRapidOption = null;
+    document.getElementById('rapidQuestion').textContent = q.q;
+    renderRapidOptions(q, null, null);
+  }
+
+  if (state.turn.rapidResult){
+    buzzBtn.classList.add('hidden');
+    buzzStatus.textContent = '';
+    renderRapidOptions(q, q.answer, state.turn.rapidPickedOption);
+    qaBlock.classList.remove('hidden');
+    var box = document.getElementById('rapidResultBox');
+    box.classList.remove('hidden');
+    var correct = state.turn.rapidResult === 'correct';
+    box.className = 'qa-result ' + (correct ? 'correct' : 'incorrect');
+    box.textContent = correct ? 'CORRECT \u2014 POINTS AWARDED' : 'INCORRECT \u2014 NO POINTS';
+    return;
+  }
+  document.getElementById('rapidResultBox').classList.add('hidden');
+
+  if (state.turn.rapidBuzzedBy){
+    buzzBtn.classList.add('hidden');
+    if (state.turn.rapidBuzzedBy === myPlayerId){
+      buzzStatus.textContent = 'YOU BUZZED IN \u2014 ANSWER NOW';
+      qaBlock.classList.remove('hidden');
+    } else {
+      var winnerName = state.players[state.turn.rapidBuzzedBy].name;
+      buzzStatus.textContent = winnerName.toUpperCase() + ' BUZZED IN FIRST';
+      qaBlock.classList.add('hidden');
+    }
+  } else {
+    buzzBtn.classList.remove('hidden');
+    buzzBtn.disabled = false;
+    buzzStatus.textContent = '';
+    qaBlock.classList.add('hidden');
+  }
+}
+function handleBuzz(){
+  if (!myPlayerId) return;
+  buzzIn(myPlayerId); // shared with the Board — see game-store.js
+}
+
+// ---- Hangar Challenge (RTB) view ----
+function setHangarWagerPreset(fraction){
+  var state = GameStore.getState();
+  var score = state.players[myPlayerId].score;
+  document.getElementById('hangarWagerInput').value = Math.round(score * fraction);
+}
+function submitMyHangarWager(){
+  var amount = document.getElementById('hangarWagerInput').value;
+  submitHangarWager(amount); // shared with the Board — see game-store.js
+}
+document.getElementById('hangarWagerInput').addEventListener('input', function(){
+  this.dataset.touched = '1';
+});
+
+var pickedHangarOption = null;
+var lastRenderedHangarAnsweringKey = null;
+
+function renderHangarOptions(q, correctIndex, pickedIndex){
+  var html = q.options.map(function(o, i){
+    var cls = 'qa-option';
+    var clickAttr = '';
+    if (correctIndex !== null){
+      cls += ' locked';
+      if (i === correctIndex) cls += ' correct-answer';
+      else if (i === pickedIndex) cls += ' wrong-answer';
+    } else {
+      if (i === pickedIndex) cls += ' picked locked';
+      else clickAttr = ' onclick="handleHangarOptionClick(' + i + ')"';
+    }
+    return '<div class="' + cls + '"' + clickAttr + '>' + o + '</div>';
+  }).join('');
+  document.getElementById('hangarOptions').innerHTML = html;
+}
+
+function handleHangarOptionClick(i){
+  if (pickedHangarOption !== null) return; // already answered
+  pickedHangarOption = i;
+  var state = GameStore.getState();
+  var q = HANGAR_HARD_QUESTIONS[state.turn.hangarQuestionIndex];
+  renderHangarOptions(q, null, i);
+  submitHangarAnswer(i); // shared with game-store.js — grades against the real answer and resolves
+}
+
+function renderHangarView(state){
+  var wagerBlock = document.getElementById('hangarWagerBlock');
+  var qaBlock = document.getElementById('hangarQABlock');
+  var resultBox = document.getElementById('hangarResultBox');
+
+  if (state.turn.subphase === 'WAGER_RESOLVED'){
+    wagerBlock.classList.add('hidden');
+    var q = HANGAR_HARD_QUESTIONS[state.turn.hangarQuestionIndex];
+    renderHangarOptions(q, q.answer, state.turn.hangarPickedOption);
+    qaBlock.classList.remove('hidden');
+    resultBox.classList.remove('hidden');
+    var correct = state.turn.wagerResult === 'correct';
+    var wager = state.turn.wagerAmount || 0;
+    resultBox.className = 'qa-result ' + (correct ? 'correct' : 'incorrect');
+    resultBox.textContent = correct
+      ? ('CORRECT \u2014 WAGER DOUBLED (+' + wager.toLocaleString() + ')')
+      : ('INCORRECT \u2014 LOST ' + wager.toLocaleString() + ' PTS');
+    return;
+  }
+  resultBox.classList.add('hidden');
+
+  if (state.turn.subphase === 'WAGER_ANSWERING'){
+    wagerBlock.classList.add('hidden');
+    qaBlock.classList.remove('hidden');
+    var q = HANGAR_HARD_QUESTIONS[state.turn.hangarQuestionIndex];
+    if (lastRenderedHangarAnsweringKey !== state.turn.timerEndsAt){
+      lastRenderedHangarAnsweringKey = state.turn.timerEndsAt;
+      pickedHangarOption = null;
+      document.getElementById('hangarQuestion').textContent = q.q;
+      renderHangarOptions(q, null, null);
+    }
+    document.getElementById('hangarWagerNote').textContent = 'WAGERED ' + (state.turn.wagerAmount || 0).toLocaleString();
+  } else {
+    // WAGER_INPUT
+    qaBlock.classList.add('hidden');
+    wagerBlock.classList.remove('hidden');
+    var score = state.players[myPlayerId].score;
+    document.getElementById('hangarMaxScore').textContent = 'YOUR SCORE: ' + score.toLocaleString();
+    var input = document.getElementById('hangarWagerInput');
+    input.max = score;
+    if (!input.dataset.touched){ input.value = score; }
+  }
+}
+
+function renderMainScreen(state){
+  var p = state.players[myPlayerId];
+  if (!p){
+    localStorage.removeItem(STORAGE_KEY);
+    myPlayerId = null;
+    render(state);
+    return;
+  }
+  document.getElementById('mainDot').className = 'dot ' + connectionDotClass();
+  document.getElementById('mainConnLabel').textContent = connectionLabel();
+  document.getElementById('mainRoomLabel').textContent = 'ROOM ' + state.roomCode;
+  document.getElementById('mySprite').className = 'piece-sprite ' + p.sprite;
+  document.getElementById('myName').textContent = p.name;
+  document.getElementById('myTile').textContent = p.tile || '';
+  document.getElementById('myScore').textContent = p.score.toLocaleString();
+  document.getElementById('roomChip').textContent = 'ROOM ' + state.roomCode;
+
+  var iAmOnMission = state.phase === 'RESOLVING_MISSION' && state.currentPlayerId === myPlayerId;
+  var iAmInRapid = state.phase === 'RESOLVING_RAPID' && state.turn.rapidPlayers && state.turn.rapidPlayers.indexOf(myPlayerId) !== -1;
+  var iAmInHangar = state.phase === 'RESOLVING_HANGAR_WAGER' && state.currentPlayerId === myPlayerId;
+
+  idleViewEl.classList.toggle('hidden', iAmOnMission || iAmInRapid || iAmInHangar);
+  missionViewEl.classList.toggle('hidden', !iAmOnMission);
+  rapidViewEl.classList.toggle('hidden', !iAmInRapid);
+  hangarViewEl.classList.toggle('hidden', !iAmInHangar);
+  knobAreaEl.classList.toggle('hidden', iAmOnMission || iAmInRapid || iAmInHangar);
+
+  if (iAmOnMission){
+    renderMissionView(state);
+    return;
+  }
+  if (iAmInRapid){
+    renderRapidView(state);
+    return;
+  }
+  if (iAmInHangar){
+    renderHangarView(state);
+    return;
+  }
+
+  var myTurn = state.currentPlayerId === myPlayerId && state.phase === 'TURN_START';
+  var statusEl = document.getElementById('turnStatus');
+  if (myTurn){
+    statusEl.textContent = 'YOUR TURN \u2014 PRESS THE KNOB';
+    statusEl.className = 'turn-status mine';
+  } else if (state.phase === 'RESOLVING_MISSION'){
+    statusEl.textContent = (state.players[state.currentPlayerId].name || '').toUpperCase() + ' IS ON A MISSION\u2026';
+    statusEl.className = 'turn-status waiting';
+  } else if (state.phase === 'RESOLVING_RAPID'){
+    var names = state.turn.rapidPlayers.map(function(id){ return state.players[id].name; }).join(' & ');
+    statusEl.textContent = 'RAPID ROUND: ' + names.toUpperCase();
+    statusEl.className = 'turn-status waiting';
+  } else if (state.phase === 'RESOLVING_HANGAR_WAGER'){
+    statusEl.textContent = (state.players[state.currentPlayerId].name || '').toUpperCase() + ' IS ON THE HANGAR CHALLENGE\u2026';
+    statusEl.className = 'turn-status waiting';
+  } else {
+    var currentName = state.players[state.currentPlayerId] ? state.players[state.currentPlayerId].name : '\u2014';
+    statusEl.textContent = state.phase === 'TURN_START' ? ('WAITING ON ' + currentName.toUpperCase()) : 'IN PROGRESS\u2026';
+    statusEl.className = 'turn-status waiting';
+  }
+
+  spinBtnEl.classList.toggle('disabled', !myTurn);
+  knobCaptionEl.textContent = myTurn ? 'PRESS TO SPIN' : 'LOCKED';
+}
+
+function render(state){
+  if (myPlayerId && state.players[myPlayerId]){
+    joinTapScreenEl.classList.add('hidden');
+    yellowBtnWrapEl.classList.add('hidden');
+    yellowBtnLabelEl.classList.add('hidden');
+    joinCustomizeScreenEl.classList.add('hidden');
+    mainScreenEl.classList.remove('hidden');
+    leaveBtnEl.classList.remove('hidden');
+    renderMainScreen(state);
+  } else {
+    mainScreenEl.classList.add('hidden');
+    leaveBtnEl.classList.add('hidden');
+    document.getElementById('roomChip').textContent = 'ROOM ' + state.roomCode;
+    if (!joinCustomizeScreenEl.classList.contains('hidden') && pendingSeatId){
+      refreshTransportOptions(state); // keep exclusivity fresh while mid-customization
+    } else {
+      joinCustomizeScreenEl.classList.add('hidden');
+      joinTapScreenEl.classList.remove('hidden');
+      yellowBtnWrapEl.classList.remove('hidden');
+      yellowBtnLabelEl.classList.remove('hidden');
+      renderJoinTapScreen(state);
+    }
+  }
+}
+
+GameStore.subscribe(render);
+
+// ---- Countdown tick loop ----
+// Purely cosmetic countdown display for whichever answer view is showing —
+// the actual timeout resolution is primarily the Board's job (see its own
+// tick loop), but resolving here too is harmless and guarded the same way
+// (shared state + a local-only guard key), so it also works as a backup in
+// case the Board's tab is ever backgrounded/throttled.
+setInterval(function(){
+  var state = GameStore.getState();
+  if (!myPlayerId) return;
+
+  if (state.phase === 'RESOLVING_MISSION' && state.currentPlayerId === myPlayerId &&
+      state.turn.subphase === 'MISSION_ANSWERING' && state.turn.timerEndsAt){
+    var secLeft = Math.max(0, Math.ceil((state.turn.timerEndsAt - Date.now()) / 1000));
+    var t = document.getElementById('missionTimer');
+    if (t){ t.textContent = secLeft + 's'; t.classList.toggle('low', secLeft <= 10); }
+    if (secLeft <= 0) resolveMission(false);
+  } else if (state.phase === 'RESOLVING_RAPID' && state.turn.rapidPlayers &&
+      state.turn.rapidPlayers.indexOf(myPlayerId) !== -1 && !state.turn.rapidBuzzedBy &&
+      !state.turn.rapidResult && state.turn.rapidTimerEndsAt){
+    var rSecLeft = Math.max(0, Math.ceil((state.turn.rapidTimerEndsAt - Date.now()) / 1000));
+    var rt = document.getElementById('rapidTimer');
+    if (rt){ rt.textContent = rSecLeft + 's'; rt.classList.toggle('low', rSecLeft <= 8); }
+  } else if (state.phase === 'RESOLVING_HANGAR_WAGER' && state.currentPlayerId === myPlayerId &&
+      state.turn.subphase === 'WAGER_ANSWERING' && state.turn.timerEndsAt){
+    var hSecLeft = Math.max(0, Math.ceil((state.turn.timerEndsAt - Date.now()) / 1000));
+    var ht = document.getElementById('hangarTimer');
+    if (ht){ ht.textContent = hSecLeft + 's'; ht.classList.toggle('low', hSecLeft <= 10); }
+    if (hSecLeft <= 0) resolveHangarWager(false);
+  }
+}, 250);
+</script>
+</body>
+</html>
