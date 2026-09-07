@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Confidently Wrong — Player Console</title>
+<link rel="stylesheet" href="sprites.css">
+<style>
+  :root{
+    --case: #DAD3EA;       /* pale lavender ventilator casing */
+    --case-dark: #C7BEDF;
+    --purple: #6B4FA0;     /* main purple accent, like the ReVel trim */
+    --purple-dark: #4B3574;
+    --purple-light: #8a6cc4;
+    --navy: #14131E;       /* dark "screen" background */
+    --led: #ff5a33;        /* CareFusion-style amber/red LED digit color */
+    --led-glow: rgba(255,90,51,0.55);
+    --green-ring: #4CDB6A; /* the highlighted knob ring on the reference photo */
+    --red: #B23B26;
+    --yellow: #E8B93A;
+    --ink: #241F2E;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{
+    height:100%; background:#0E0D14;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    color:var(--ink);
+    display:flex; align-items:flex-start; justify-content:center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body{ padding: 14px 10px 24px; min-height:100%; }
+
+  /* LED / calculator-style digit font, used throughout for the device's
+     own readouts and labels — mimics the ReVel's segment-display look
+     without needing an external font file. */
+  .led-text{
+    font-family:'Courier New', 'Consolas', monospace;
+    letter-spacing:0.06em;
+    color:var(--led);
+    text-shadow:0 0 5px var(--led-glow);
+  }
+
+  /* ---- Device casing ---- */
+  .device{
+    width:100%; max-width:420px;
+    background: linear-gradient(180deg, var(--case), var(--case-dark));
+    border: 3px solid var(--purple-dark);
+    border-radius: 28px;
+    box-shadow: 0 10px 0 rgba(0,0,0,0.35), 0 18px 30px rgba(0,0,0,0.5);
+    padding: 14px 14px 20px;
+    position: relative;
+  }
+  .device::before{
+    content:""; position:absolute; top:8px; left:50%; transform:translateX(-50%);
+    width:70px; height:8px; border-radius:6px;
+    background: repeating-linear-gradient(90deg, var(--purple-dark) 0 4px, transparent 4px 7px);
+    opacity:0.6;
+  }
+
+  .topbar{
+    margin-top: 14px;
+    background:#fff; border-radius: 14px; padding: 8px 10px;
+    text-align:center; box-shadow: inset 0 0 0 2px var(--case-dark);
+  }
+  .topbar .brand{ font-weight:800; letter-spacing:0.03em; font-size: 15px; color: var(--ink); }
+  .topbar .subbrand{ font-size:9px; letter-spacing:0.18em; color:#8b83a3; margin-top:1px; }
+
+  /* ---- Screen ---- */
+  .screen{
+    margin-top: 12px;
+    background: var(--navy);
+    border-radius: 14px;
+    padding: 14px 12px;
+    box-shadow: inset 0 0 0 3px #050509, inset 0 2px 10px rgba(0,0,0,0.6);
+    color:#fff;
+    min-height: 240px;
+  }
+  .screen-row{ display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#9d97c4; letter-spacing:0.05em; }
+  .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:5px; }
+  .dot.connected{ background:#3fd15c; box-shadow:0 0 6px #3fd15c; }
+  .dot.connecting{ background:var(--yellow); box-shadow:0 0 6px var(--yellow); }
+  .dot.local{ background:#888; }
+  .dot.error{ background:var(--red); box-shadow:0 0 6px var(--red); }
+
+  .avatar-wrap{ display:flex; flex-direction:column; align-items:center; margin-top: 10px; }
+  .avatar-ring{
+    width: 92px; height:92px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, #2a2840, #0c0b14);
+    border: 3px solid var(--purple);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 0 0 4px rgba(107,79,160,0.25);
+  }
+  .avatar-ring .piece-sprite{ width:56px; height:56px; background-size:contain; background-repeat:no-repeat; background-position:center; }
+  .player-name{ margin-top:8px; font-weight:700; font-size:16px; }
+  .player-tile{ font-size:10px; color:#9d97c4; margin-top:2px; letter-spacing:0.04em; }
+
+  .score-lcd{
+    margin-top:14px; background:#050509; border-radius:8px; padding:8px 10px;
+    display:flex; justify-content:space-between; align-items:baseline;
+    box-shadow: inset 0 0 0 1px #2a2840;
+  }
+  .score-lcd .label{ font-size:10px; letter-spacing:0.15em; color:#6f6890; }
+  .score-lcd .value{ font-size:26px; }
+
+  .turn-status{
+    margin-top:14px; text-align:center; font-size:13px; font-weight:700;
+    padding:8px 6px; border-radius:8px; letter-spacing:0.02em;
+  }
+  .turn-status.mine{ background:rgba(63,209,92,0.15); color:#7CFC9A; }
+  .turn-status.waiting{ background:rgba(255,255,255,0.06); color:#9d97c4; }
+
+  /* ---- Big rotary knob — matches the ReVel's actual central encoder,
+     including the bright green highlight ring from the reference photo ---- */
+  .knob-area{ display:flex; flex-direction:column; align-items:center; margin-top:18px; }
+  .knob{
+    width:120px; height:120px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, var(--purple-light), var(--purple) 55%, var(--purple-dark) 100%);
+    border: 4px solid var(--purple-dark);
+    box-shadow:
+      0 6px 0 var(--purple-dark), 0 10px 18px rgba(0,0,0,0.4),
+      0 0 0 5px var(--green-ring), 0 0 16px 3px rgba(76,219,106,0.65);
+    color:#fff; font-weight:800; font-size:0; letter-spacing:0.03em;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    padding: 10px;
+    cursor:pointer; user-select:none; -webkit-user-select:none;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+    position:relative;
+  }
+  .knob:active:not(.disabled){ transform: translateY(4px); box-shadow: 0 2px 0 var(--purple-dark), 0 4px 10px rgba(0,0,0,0.4), 0 0 0 5px var(--green-ring); }
+  .knob.disabled{
+    background: radial-gradient(circle at 35% 30%, #9a94ad, #77718c 55%, #5c5670 100%);
+    border-color:#5c5670; box-shadow:0 6px 0 #5c5670, 0 0 0 5px #4a4658; opacity:0.75; cursor:default;
+  }
+  .knob-caption{ margin-top:12px; font-size:12px; letter-spacing:0.08em; text-align:center; min-height:14px; }
+
+  /* ---- Bottom control strip ---- */
+  .bottombar{ display:flex; align-items:center; justify-content:space-between; margin-top:16px; gap:8px; }
+  .mini-btn{
+    flex:0 0 auto; background:var(--purple); color:#fff; border:none; border-radius:8px;
+    padding:8px 12px; font-size:11px; font-weight:700; letter-spacing:0.03em; cursor:pointer;
+    box-shadow: 0 3px 0 var(--purple-dark);
+  }
+  .mini-btn:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--purple-dark); }
+  .room-chip{ flex:1; text-align:right; font-size:10px; color:#5b5473; letter-spacing:0.05em; }
+
+  /* ---- Join screen: step 1 (seat) ---- */
+  .join-title{ font-size:13px; color:#c9c1e6; letter-spacing:0.05em; text-align:center; margin-bottom:10px; }
+  .seat-list{ display:flex; flex-direction:column; gap:8px; }
+  .seat{
+    display:flex; align-items:center; gap:10px;
+    background:#1c1a2b; border:1px solid #322e48; border-radius:10px; padding:8px 10px;
+    cursor:pointer;
+  }
+  .seat:active{ background:#262239; }
+  .seat .piece-sprite{ width:34px; height:34px; background-size:contain; background-repeat:no-repeat; background-position:center; flex:0 0 auto; }
+  .seat .seat-info{ flex:1; }
+  .seat .seat-name{ font-size:13px; font-weight:700; color:#fff; }
+  .seat .seat-status{ font-size:10px; color:#8b83a3; margin-top:1px; }
+  .seat .seat-status.taken{ color:var(--yellow); }
+
+  /* ---- Join screen: step 2 (name + sprite) ---- */
+  .customize-back{ background:none; border:none; color:#9d97c4; font-size:11px; letter-spacing:0.05em; cursor:pointer; padding:2px 0 10px; }
+  .name-input{
+    width:100%; background:#1c1a2b; border:1px solid #322e48; border-radius:8px;
+    padding:10px 12px; font-size:15px; color:#fff; margin-bottom:14px;
+  }
+  .name-input::placeholder{ color:#5b5473; }
+  .sprite-grid-label{ font-size:11px; color:#9d97c4; letter-spacing:0.05em; margin-bottom:8px; }
+  .sprite-grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:16px; }
+  .sprite-cell{
+    aspect-ratio:1; background:#1c1a2b; border:2px solid #322e48; border-radius:10px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    position:relative;
+  }
+  .sprite-cell .piece-sprite{ width:70%; height:70%; background-size:contain; background-repeat:no-repeat; background-position:center; }
+  .sprite-cell.selected{ border-color:var(--green-ring); box-shadow:0 0 10px 1px rgba(76,219,106,0.5); }
+  .sprite-cell.taken{ opacity:0.28; cursor:not-allowed; }
+  .sprite-cell.taken::after{
+    content:"TAKEN"; position:absolute; bottom:2px; left:0; right:0; text-align:center;
+    font-size:7px; letter-spacing:0.06em; color:#fff;
+  }
+  .confirm-join-btn{
+    width:100%; background:var(--green-ring); color:#0a2e12; border:none; border-radius:8px;
+    padding:12px 0; font-size:14px; font-weight:800; letter-spacing:0.04em; cursor:pointer;
+    box-shadow:0 3px 0 #2f9e48;
+  }
+  .confirm-join-btn:disabled{ background:#4a4658; color:#8b83a3; box-shadow:0 3px 0 #322e48; cursor:not-allowed; }
+
+  /* ---- Mission / Rapid Round answer panels (mirrors the Board's overlay,
+     simplified for a phone-width screen) ---- */
+  .qa-cat{ display:flex; justify-content:space-between; align-items:center; font-size:12px; letter-spacing:0.06em; margin-bottom:10px; }
+  .qa-timer{ font-size:14px; }
+  .qa-timer.low{ color:var(--red); text-shadow:0 0 6px rgba(178,59,38,0.7); }
+  .qa-question{ font-size:14px; line-height:1.4; margin-bottom:12px; color:#f0eef7; }
+  .qa-options{ display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+  .qa-options div{
+    background:#1c1a2b; border:1px solid #322e48; border-radius:8px; padding:8px 10px;
+    font-size:12.5px; color:#e5e1f2;
+  }
+  .qa-demo-btns{ display:flex; gap:8px; }
+  .qa-demo-btns button{
+    flex:1; padding:10px 0; border:none; border-radius:8px; font-size:12px; font-weight:800;
+    letter-spacing:0.04em; cursor:pointer;
+  }
+  .qa-demo-btns .ok{ background:var(--green-ring); color:#0a2e12; }
+  .qa-demo-btns .no{ background:var(--red); color:#fff; }
+  .qa-result{ text-align:center; font-size:13px; font-weight:700; padding:8px 6px; border-radius:8px; }
+  .qa-result.correct{ background:rgba(76,219,106,0.15); color:var(--green-ring); }
+  .qa-result.incorrect{ background:rgba(178,59,38,0.2); color:#ff8a73; }
+
+  .buzz-btn{
+    width:100%; padding:22px 0; border:none; border-radius:12px; font-size:16px; font-weight:800;
+    letter-spacing:0.05em; cursor:pointer; margin-bottom:14px;
+    background:linear-gradient(180deg, var(--purple-light), var(--purple)); color:#fff;
+    box-shadow:0 4px 0 var(--purple-dark);
+  }
+  .buzz-btn:active{ transform:translateY(3px); box-shadow:0 1px 0 var(--purple-dark); }
+  .buzz-btn:disabled{ background:#4a4658; box-shadow:0 4px 0 #322e48; cursor:default; }
+  .buzz-status{ text-align:center; font-size:12px; color:#9d97c4; margin-bottom:10px; }
+
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+
+<div class="device">
+  <div class="topbar">
+    <div class="brand">CONFIDENTLY WRONG</div>
+    <div class="subbrand led-text">FLIGHT CONSOLE &middot; PLAYER UNIT</div>
+  </div>
+
+  <!-- JOIN SCREEN — STEP 1: pick a seat -->
+  <div class="screen" id="joinSeatScreen">
+    <div class="screen-row"><span><span class="dot local" id="joinDot"></span><span id="joinConnLabel">CONNECTING&hellip;</span></span><span id="joinRoomLabel">ROOM ----</span></div>
+    <div class="join-title" style="margin-top:14px;">TAP YOUR SEAT TO JOIN</div>
+    <div class="seat-list" id="seatList"></div>
+  </div>
+
+  <!-- JOIN SCREEN — STEP 2: name + sprite -->
+  <div class="screen hidden" id="joinCustomizeScreen">
+    <button class="customize-back" onclick="backToSeatSelect()">&larr; BACK TO SEATS</button>
+    <div class="join-title" style="text-align:left;">YOUR NAME</div>
+    <input type="text" class="name-input" id="nameInput" placeholder="e.g. FN Sarah" maxlength="24">
+    <div class="sprite-grid-label">PICK YOUR SPRITE</div>
+    <div class="sprite-grid" id="spriteGrid"></div>
+    <button class="confirm-join-btn" id="confirmJoinBtn" onclick="confirmJoin()" disabled>JOIN GAME</button>
+  </div>
+
+  <!-- MAIN SCREEN -->
+  <div class="screen hidden" id="mainScreen">
+    <div class="screen-row"><span><span class="dot local" id="mainDot"></span><span id="mainConnLabel">CONNECTING&hellip;</span></span><span id="mainRoomLabel">ROOM ----</span></div>
+
+    <!-- idle / your-turn view -->
+    <div id="idleView">
+      <div class="avatar-wrap">
+        <div class="avatar-ring"><div class="piece-sprite" id="mySprite"></div></div>
+        <div class="player-name" id="myName">&mdash;</div>
+        <div class="player-tile" id="myTile"></div>
+      </div>
+      <div class="score-lcd">
+        <div class="label">SCORE</div>
+        <div class="value led-text" id="myScore">0</div>
+      </div>
+      <div class="turn-status waiting" id="turnStatus">WAITING&hellip;</div>
+    </div>
+
+    <!-- mission-answering view (this player is on a mission) -->
+    <div id="missionView" class="hidden">
+      <div class="qa-cat"><span id="missionCat">CATEGORY</span><span class="qa-timer led-text" id="missionTimer">40s</span></div>
+      <div class="qa-question" id="missionQuestion"></div>
+      <div class="qa-options" id="missionOptions"></div>
+      <div class="qa-demo-btns" id="missionDemoBtns">
+        <button class="ok" onclick="resolveMission(true)">CORRECT</button>
+        <button class="no" onclick="resolveMission(false)">INCORRECT</button>
+      </div>
+      <div class="qa-result hidden" id="missionResultBox"></div>
+    </div>
+
+    <!-- rapid-round view (this player is one of the two involved) -->
+    <div id="rapidView" class="hidden">
+      <div class="qa-cat"><span>RAPID ROUND</span><span class="qa-timer led-text" id="rapidTimer">20s</span></div>
+      <button class="buzz-btn" id="buzzBtn" onclick="handleBuzz()">BUZZ IN</button>
+      <div class="buzz-status" id="buzzStatus"></div>
+      <div id="rapidQABlock" class="hidden">
+        <div class="qa-question" id="rapidQuestion"></div>
+        <div class="qa-options" id="rapidOptions"></div>
+        <div class="qa-demo-btns" id="rapidDemoBtns">
+          <button class="ok" onclick="resolveRapidRound(true)">CORRECT</button>
+          <button class="no" onclick="resolveRapidRound(false)">INCORRECT</button>
+        </div>
+      </div>
+      <div class="qa-result hidden" id="rapidResultBox"></div>
+    </div>
+  </div>
+
+  <!-- knob only shown in the idle view -->
+  <div class="knob-area" id="knobArea">
+    <button class="knob disabled" id="spinBtn"></button>
+    <div class="knob-caption led-text" id="knobCaption">PRESS TO SPIN</div>
+  </div>
+
+  <div class="bottombar">
+    <button class="mini-btn hidden" id="leaveBtn">LEAVE SEAT</button>
+    <div class="room-chip" id="roomChip"></div>
+  </div>
+</div>
+
+<script src="game-store.js"></script>
+<script>
+// =====================================================================
+// PLAYER CONSOLE
+// A thin phone-friendly view over the exact same GameStore the Board
+// uses (see game-store.js). Each phone claims one of the four seats
+// (players p1-p4), picks its own name + sprite (unique across seats),
+// and can answer missions / rapid rounds directly — all writes go
+// through the same shared functions the Board's demo buttons use, so
+// the Board's tick loop remains the one place that advances turns.
+// =====================================================================
+
+var STORAGE_KEY = 'cw_playerId_' + GameStore.getState().roomCode;
+var myPlayerId = localStorage.getItem(STORAGE_KEY);
+var pendingSeatId = null;      // seat chosen in step 1, being customized in step 2
+var selectedSprite = null;     // sprite chosen (not yet confirmed) in step 2
+
+var joinSeatScreenEl = document.getElementById('joinSeatScreen');
+var joinCustomizeScreenEl = document.getElementById('joinCustomizeScreen');
+var mainScreenEl = document.getElementById('mainScreen');
+var seatListEl = document.getElementById('seatList');
+var spriteGridEl = document.getElementById('spriteGrid');
+var nameInputEl = document.getElementById('nameInput');
+var confirmJoinBtnEl = document.getElementById('confirmJoinBtn');
+var spinBtnEl = document.getElementById('spinBtn');
+var knobAreaEl = document.getElementById('knobArea');
+var knobCaptionEl = document.getElementById('knobCaption');
+var leaveBtnEl = document.getElementById('leaveBtn');
+var idleViewEl = document.getElementById('idleView');
+var missionViewEl = document.getElementById('missionView');
+var rapidViewEl = document.getElementById('rapidView');
+
+function pickSeat(id){
+  pendingSeatId = id;
+  var state = GameStore.getState();
+  selectedSprite = null; // start blank so exclusivity + selection is explicit each time
+  nameInputEl.value = '';
+  renderSpriteGrid(state);
+  updateConfirmEnabled();
+  joinSeatScreenEl.classList.add('hidden');
+  joinCustomizeScreenEl.classList.remove('hidden');
+}
+
+function backToSeatSelect(){
+  pendingSeatId = null;
+  joinCustomizeScreenEl.classList.add('hidden');
+  joinSeatScreenEl.classList.remove('hidden');
+}
+
+function renderSpriteGrid(state){
+  var takenSprites = {};
+  state.turnOrder.forEach(function(id){
+    var p = state.players[id];
+    if (id !== pendingSeatId && p.connected) takenSprites[p.sprite] = true;
+  });
+
+  var html = '';
+  AVAILABLE_SPRITES.forEach(function(sprite){
+    var isTaken = !!takenSprites[sprite];
+    var isSelected = sprite === selectedSprite;
+    html += '<div class="sprite-cell' + (isTaken ? ' taken' : '') + (isSelected ? ' selected' : '') + '"' +
+      (isTaken ? '' : ' onclick="selectSprite(\'' + sprite + '\')"') + '>' +
+      '<div class="piece-sprite ' + sprite + '"></div>' +
+    '</div>';
+  });
+  spriteGridEl.innerHTML = html;
+}
+
+function selectSprite(sprite){
+  selectedSprite = sprite;
+  renderSpriteGrid(GameStore.getState());
+  updateConfirmEnabled();
+}
+
+function updateConfirmEnabled(){
+  var nameOk = nameInputEl.value.trim().length > 0;
+  confirmJoinBtnEl.disabled = !(nameOk && selectedSprite);
+}
+nameInputEl.addEventListener('input', updateConfirmEnabled);
+
+function confirmJoin(){
+  if (!pendingSeatId || !selectedSprite) return;
+  var name = nameInputEl.value.trim();
+  if (!name) return;
+  var state = GameStore.getState();
+  GameStore.setPlayer(pendingSeatId, { name: name, sprite: selectedSprite, connected: true });
+  GameStore.addLog(name + ' joined from a phone.');
+  localStorage.setItem(STORAGE_KEY, pendingSeatId);
+  myPlayerId = pendingSeatId;
+  pendingSeatId = null;
+  render(GameStore.getState());
+}
+
+function leaveSeat(){
+  if (!myPlayerId) return;
+  GameStore.setPlayer(myPlayerId, { connected: false });
+  localStorage.removeItem(STORAGE_KEY);
+  myPlayerId = null;
+  render(GameStore.getState());
+}
+leaveBtnEl.addEventListener('click', leaveSeat);
+
+// Guards against double-taps firing two rolls for one press, the same
+// pattern the Board uses for its own PRESS TO MOVE button.
+var spinLocked = false;
+spinBtnEl.addEventListener('click', function(){
+  if (spinLocked) return;
+  var state = GameStore.getState();
+  if (state.phase !== 'TURN_START' || state.currentPlayerId !== myPlayerId) return;
+  spinLocked = true;
+  spinMoveIndicator(); // shared with the Board — see game-store.js
+  setTimeout(function(){ spinLocked = false; }, 1200);
+});
+
+function connectionDotClass(){
+  var status = GameStore.getConnectionStatus();
+  if (status === 'local' && GameStore.wantsFirebase()) return 'connecting';
+  if (status === 'connected') return 'connected';
+  if (status === 'error') return 'error';
+  return 'local';
+}
+function connectionLabel(){
+  var status = GameStore.getConnectionStatus();
+  if (status === 'local' && GameStore.wantsFirebase()) return 'CONNECTING\u2026';
+  if (status === 'connected') return 'LIVE';
+  if (status === 'error') return 'CONNECTION ERROR';
+  return 'OFFLINE MODE';
+}
+
+function renderJoinSeatScreen(state){
+  document.getElementById('joinDot').className = 'dot ' + connectionDotClass();
+  document.getElementById('joinConnLabel').textContent = connectionLabel();
+  document.getElementById('joinRoomLabel').textContent = 'ROOM ' + state.roomCode;
+
+  var html = '';
+  state.turnOrder.forEach(function(id){
+    var p = state.players[id];
+    html += '<div class="seat" onclick="pickSeat(\'' + id + '\')">' +
+      '<div class="piece-sprite ' + p.sprite + '"></div>' +
+      '<div class="seat-info">' +
+        '<div class="seat-name">' + p.name + '</div>' +
+        '<div class="seat-status' + (p.connected ? ' taken' : '') + '">' + (p.connected ? 'ALREADY CONNECTED \u2014 TAP TO TAKE OVER' : 'OPEN SEAT') + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  seatListEl.innerHTML = html;
+}
+
+// ---- Mission-answering view ----
+var lastRenderedMissionKey = null;
+function renderMissionView(state){
+  var q = SAMPLE_QUESTIONS[state.turn.missionCategory];
+  var key = state.turn.landedSpaceId + '|' + state.turn.missionCategory + '|' + state.currentPlayerId;
+
+  if (state.turn.subphase === 'MISSION_RESOLVED'){
+    document.getElementById('missionDemoBtns').classList.add('hidden');
+    var box = document.getElementById('missionResultBox');
+    box.classList.remove('hidden');
+    var correct = state.turn.missionResult === 'correct';
+    box.className = 'qa-result ' + (correct ? 'correct' : 'incorrect');
+    box.textContent = correct ? 'CORRECT \u2014 POINTS AWARDED' : 'INCORRECT \u2014 NO POINTS';
+  } else {
+    if (lastRenderedMissionKey !== key){
+      lastRenderedMissionKey = key;
+      document.getElementById('missionCat').textContent = state.turn.missionCategory.toUpperCase();
+      document.getElementById('missionQuestion').textContent = q.q;
+      document.getElementById('missionOptions').innerHTML = q.options.map(function(o){ return '<div>' + o + '</div>'; }).join('');
+      document.getElementById('missionDemoBtns').classList.remove('hidden');
+      document.getElementById('missionResultBox').classList.add('hidden');
+    }
+  }
+}
+
+// ---- Rapid-round view ----
+var lastRenderedRapidKey = null;
+function renderRapidView(state){
+  var key = state.turn.rapidPlayers.join('|') + '|' + state.turn.rapidCategory;
+  var q = SAMPLE_QUESTIONS[state.turn.rapidCategory];
+  var buzzBtn = document.getElementById('buzzBtn');
+  var buzzStatus = document.getElementById('buzzStatus');
+  var qaBlock = document.getElementById('rapidQABlock');
+
+  if (lastRenderedRapidKey !== key){
+    lastRenderedRapidKey = key;
+    document.getElementById('rapidQuestion').textContent = q.q;
+    document.getElementById('rapidOptions').innerHTML = q.options.map(function(o){ return '<div>' + o + '</div>'; }).join('');
+  }
+
+  if (state.turn.rapidResult){
+    buzzBtn.classList.add('hidden');
+    buzzStatus.textContent = '';
+    qaBlock.classList.add('hidden');
+    var box = document.getElementById('rapidResultBox');
+    box.classList.remove('hidden');
+    var correct = state.turn.rapidResult === 'correct';
+    box.className = 'qa-result ' + (correct ? 'correct' : 'incorrect');
+    box.textContent = correct ? 'CORRECT \u2014 POINTS AWARDED' : 'INCORRECT \u2014 NO POINTS';
+    return;
+  }
+  document.getElementById('rapidResultBox').classList.add('hidden');
+
+  if (state.turn.rapidBuzzedBy){
+    buzzBtn.classList.add('hidden');
+    if (state.turn.rapidBuzzedBy === myPlayerId){
+      buzzStatus.textContent = 'YOU BUZZED IN \u2014 ANSWER NOW';
+      qaBlock.classList.remove('hidden');
+    } else {
+      var winnerName = state.players[state.turn.rapidBuzzedBy].name;
+      buzzStatus.textContent = winnerName.toUpperCase() + ' BUZZED IN FIRST';
+      qaBlock.classList.add('hidden');
+    }
+  } else {
+    buzzBtn.classList.remove('hidden');
+    buzzBtn.disabled = false;
+    buzzStatus.textContent = '';
+    qaBlock.classList.add('hidden');
+  }
+}
+function handleBuzz(){
+  if (!myPlayerId) return;
+  buzzIn(myPlayerId); // shared with the Board — see game-store.js
+}
+
+function renderMainScreen(state){
+  var p = state.players[myPlayerId];
+  if (!p){
+    localStorage.removeItem(STORAGE_KEY);
+    myPlayerId = null;
+    render(state);
+    return;
+  }
+  document.getElementById('mainDot').className = 'dot ' + connectionDotClass();
+  document.getElementById('mainConnLabel').textContent = connectionLabel();
+  document.getElementById('mainRoomLabel').textContent = 'ROOM ' + state.roomCode;
+  document.getElementById('mySprite').className = 'piece-sprite ' + p.sprite;
+  document.getElementById('myName').textContent = p.name;
+  document.getElementById('myTile').textContent = p.tile || '';
+  document.getElementById('myScore').textContent = p.score.toLocaleString();
+  document.getElementById('roomChip').textContent = 'ROOM ' + state.roomCode;
+
+  var iAmOnMission = state.phase === 'RESOLVING_MISSION' && state.currentPlayerId === myPlayerId;
+  var iAmInRapid = state.phase === 'RESOLVING_RAPID' && state.turn.rapidPlayers && state.turn.rapidPlayers.indexOf(myPlayerId) !== -1;
+
+  idleViewEl.classList.toggle('hidden', iAmOnMission || iAmInRapid);
+  missionViewEl.classList.toggle('hidden', !iAmOnMission);
+  rapidViewEl.classList.toggle('hidden', !iAmInRapid);
+  knobAreaEl.classList.toggle('hidden', iAmOnMission || iAmInRapid);
+
+  if (iAmOnMission){
+    renderMissionView(state);
+    return;
+  }
+  if (iAmInRapid){
+    renderRapidView(state);
+    return;
+  }
+
+  var myTurn = state.currentPlayerId === myPlayerId && state.phase === 'TURN_START';
+  var statusEl = document.getElementById('turnStatus');
+  if (myTurn){
+    statusEl.textContent = 'YOUR TURN \u2014 PRESS THE KNOB';
+    statusEl.className = 'turn-status mine';
+  } else if (state.phase === 'RESOLVING_MISSION'){
+    statusEl.textContent = (state.players[state.currentPlayerId].name || '').toUpperCase() + ' IS ON A MISSION\u2026';
+    statusEl.className = 'turn-status waiting';
+  } else if (state.phase === 'RESOLVING_RAPID'){
+    var names = state.turn.rapidPlayers.map(function(id){ return state.players[id].name; }).join(' & ');
+    statusEl.textContent = 'RAPID ROUND: ' + names.toUpperCase();
+    statusEl.className = 'turn-status waiting';
+  } else {
+    var currentName = state.players[state.currentPlayerId] ? state.players[state.currentPlayerId].name : '\u2014';
+    statusEl.textContent = state.phase === 'TURN_START' ? ('WAITING ON ' + currentName.toUpperCase()) : 'IN PROGRESS\u2026';
+    statusEl.className = 'turn-status waiting';
+  }
+
+  spinBtnEl.classList.toggle('disabled', !myTurn);
+  knobCaptionEl.textContent = myTurn ? 'PRESS TO SPIN' : 'LOCKED';
+}
+
+function render(state){
+  if (myPlayerId && state.players[myPlayerId]){
+    joinSeatScreenEl.classList.add('hidden');
+    joinCustomizeScreenEl.classList.add('hidden');
+    mainScreenEl.classList.remove('hidden');
+    leaveBtnEl.classList.remove('hidden');
+    renderMainScreen(state);
+  } else {
+    mainScreenEl.classList.add('hidden');
+    leaveBtnEl.classList.add('hidden');
+    document.getElementById('roomChip').textContent = 'ROOM ' + state.roomCode;
+    if (!joinCustomizeScreenEl.classList.contains('hidden') && pendingSeatId){
+      renderSpriteGrid(state); // keep exclusivity fresh while mid-customization
+    } else {
+      joinCustomizeScreenEl.classList.add('hidden');
+      joinSeatScreenEl.classList.remove('hidden');
+      renderJoinSeatScreen(state);
+    }
+  }
+}
+
+GameStore.subscribe(render);
+</script>
+</body>
+</html>
