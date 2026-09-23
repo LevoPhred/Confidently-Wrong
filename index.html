@@ -604,8 +604,8 @@
       </svg>
     </div>
     <div class="stamp-group">
-      <div class="stamp"><div class="k">MISSION LEG</div><div class="v">04 OF 12</div></div>
-      <div class="stamp"><div class="k">STATUS</div><div class="v hot">EN ROUTE</div></div>
+      <div class="stamp"><div class="k">MISSION LEG</div><div class="v" id="missionLegValue">— OF —</div></div>
+      <div class="stamp"><div class="k">STATUS</div><div class="v" id="statusValue">STANDBY</div></div>
       <button class="fullscreen-btn" onclick="toggleFullscreen()"><span class="icon">⛶</span> FULLSCREEN</button>
     </div>
   </div>
@@ -1362,6 +1362,44 @@ function openDispatchScreen(){
   var roomCode = GameStore.getState().roomCode;
   window.open('dispatch.html?room=' + encodeURIComponent(roomCode), '_blank');
 }
+
+// The header's "MISSION LEG" / "STATUS" stamps used to be permanently
+// hardcoded to "04 OF 12" / "EN ROUTE" — pure leftover decoration that never
+// reflected anything real. Now they show the current player's actual lap +
+// board position, and the game's real phase.
+var STAMP_STATUS_LABELS = {
+  TURN_START: 'STANDBY',
+  MOVING: 'EN ROUTE',
+  RESOLVING_MISSION: 'ON MISSION',
+  RESOLVING_RAPID: 'RAPID ROUND',
+  RESOLVING_HANGAR_WAGER: 'HANGAR CHALLENGE',
+  RESOLVING_HAZARD: 'HAZARD ALERT'
+};
+function renderStampGroup(state){
+  var legEl = document.getElementById('missionLegValue');
+  var statusEl = document.getElementById('statusValue');
+  if (!legEl || !statusEl) return;
+
+  var current = state.currentPlayerId ? state.players[state.currentPlayerId] : null;
+  if (current){
+    var pos = safePosition(current.position);
+    legEl.textContent = 'LAP ' + ((current.lapsCompleted || 0) + 1) + ' — LEG ' + (pos + 1) + ' OF ' + BOARD_PATH.length;
+  } else {
+    legEl.textContent = '— OF —';
+  }
+
+  if (state.gameOver){
+    statusEl.textContent = 'GAME OVER';
+    statusEl.classList.add('hot');
+  } else if (state.paused){
+    statusEl.textContent = 'PAUSED';
+    statusEl.classList.add('hot');
+  } else {
+    statusEl.textContent = STAMP_STATUS_LABELS[state.phase] || 'STANDBY';
+    statusEl.classList.toggle('hot', state.phase !== 'TURN_START');
+  }
+}
+GameStore.subscribe(renderStampGroup);
 
 // Reflects the shared paused flag Dispatch sets — freezes are enforced by
 // game-store.js and the tick loop; this just shows the person at the board
